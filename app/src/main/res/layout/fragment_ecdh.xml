@@ -3,20 +3,33 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <data>
+
         <variable
             name="ecdhFragment"
-            type="com.example.securityex.EcdhFragment" />
+            type="com.example.securityex.view.EcdhFragment" />
     </data>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        tools:context=".EcdhFragment">
+        android:orientation="vertical"
+        tools:context=".view.EcdhFragment">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:text="ECDH" />
+            android:textStyle="bold"
+            android:text="ECDH(> API 31)" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:onClick="@{()->ecdhFragment.onClickedEvent1()}" />
+
+        <Button
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:onClick="@{()->ecdhFragment.onClickedEvent2()}" />
 
     </LinearLayout>
 </layout>

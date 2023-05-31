@@ -1,8 +1,9 @@
-package com.example.securityex
+package com.example.securityex.view
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import androidx.databinding.DataBindingUtil
+import com.example.securityex.R
 import com.example.securityex.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {

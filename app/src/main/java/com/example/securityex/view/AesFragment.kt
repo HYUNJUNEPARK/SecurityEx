@@ -1,4 +1,4 @@
-package com.example.securityex
+package com.example.securityex.view
 
 import android.os.Bundle
 import androidx.fragment.app.Fragment
@@ -6,7 +6,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.databinding.DataBindingUtil
-import androidx.interpolator.view.animation.FastOutLinearInInterpolator
+import com.example.securityex.R
 import com.example.securityex.databinding.FragmentAesBinding
 
 class AesFragment : Fragment() {

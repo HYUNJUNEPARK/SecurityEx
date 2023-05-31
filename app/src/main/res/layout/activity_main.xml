@@ -6,14 +6,14 @@
     <data>
         <variable
             name="mainActivity"
-            type="com.example.securityex.MainActivity" />
+            type="com.example.securityex.view.MainActivity" />
     </data>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        tools:context=".MainActivity">
+        tools:context=".view.MainActivity">
 
         <LinearLayout
             android:orientation="vertical"

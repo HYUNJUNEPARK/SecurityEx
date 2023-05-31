@@ -5,13 +5,13 @@
     <data>
         <variable
             name="aesFragment"
-            type="com.example.securityex.AesFragment" />
+            type="com.example.securityex.view.AesFragment" />
     </data>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        tools:context=".AesFragment">
+        tools:context=".view.AesFragment">
 
         <TextView
             android:layout_width="match_parent"

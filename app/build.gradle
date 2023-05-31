@@ -48,4 +48,7 @@ dependencies {
     //viewModel
     implementation 'androidx.fragment:fragment-ktx:1.5.7'
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1"
+
+    //EncryptedSharedPreferences
+    implementation 'androidx.security:security-crypto-ktx:1.1.0-alpha03'
 }
