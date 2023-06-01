@@ -4,24 +4,18 @@ import android.content.Context
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.system.Os.remove
 import android.util.Base64
-import android.util.Log
 import androidx.annotation.RequiresApi
 import com.example.securityex.consts.AppConst.KEY_PROVIDER
 import com.example.securityex.consts.AppConst.KEY_STORE_ALIAS
-import com.example.securityex.consts.AppConst.TAG
 import com.example.securityex.util.DataTypeConverter
 import com.example.securityex.util.ESPManager
-import java.io.FileNotFoundException
 import java.math.BigInteger
 import java.security.*
 import java.security.interfaces.ECPublicKey
 import java.security.spec.*
 import java.util.*
-import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
-import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 class EcdhAlg {
@@ -41,7 +35,8 @@ class EcdhAlg {
     }
 
     private val androidKeyStore = KeyStore.getInstance(KEY_PROVIDER).apply { load(null) }
-    private val iv: ByteArray = ByteArray(16) //CBC(Cipher Block Chaining)Mode 에서 첫번째 암호문 대신 사용되는 IV(Initial Vector)로 0으로 초기화
+    private val iv: ByteArray =
+        ByteArray(16) //CBC(Cipher Block Chaining)Mode 에서 첫번째 암호문 대신 사용되는 IV(Initial Vector)로 0으로 초기화
 
     /**
      * ECKeyPair 가 keystore 에 있는지 확인한다.
@@ -106,7 +101,7 @@ class EcdhAlg {
             val affineX = trimKeyLength(publicKey.w.affineX.toByteArray())
             val affineY = trimKeyLength(publicKey.w.affineY.toByteArray())
 
-            //PublicKey Uncompressed Form (byte[65] = [0x04(1byte)][affineX(32byte)][affineY(32byte)])
+            //PublicKey Uncompressed Form : (byte[65] = [0x04(1byte)][affineX(32byte)][affineY(32byte)])
             val ecPublicKey: ByteArray = byteArrayOf(0x04) + affineX + affineY
             return Base64.encodeToString(ecPublicKey, Base64.NO_WRAP) //ByteArray -> String
         } catch (e: Exception) {
@@ -118,57 +113,37 @@ class EcdhAlg {
     /**
      * SharedSecretKey 을 생성하고 ESP 저장. 그리고 키식별자(keyId)를 반환한다.
      * @param publicKey 상대방의 publicKey
-     * @param secureRandom 키식별자와 MessageDigest 에서 사용되는 난수
+     * @param secureRandom 키식별자이자 MessageDigest 에서 사용되는 난수
      * @return 키식별자(keyId)
      */
-    fun generateSharedSecretKey(publicKey: String, secureRandom: String): String? {
+    fun generateSharedKey(publicKey: String): String? {
         try {
-            val keyId: String = secureRandom
-            val random: ByteArray = Base64.decode(secureRandom, Base64.NO_WRAP)
-
-
-            val _friendPublicKey: ByteArray = Base64.decode(publicKey, Base64.NO_WRAP)//byteArray -> publicKey
-            val friendPublicKey: PublicKey = byteArrayToPublicKey(_friendPublicKey)!!
-
-            val myPrivateKey: PrivateKey
-            androidKeyStore.getEntry(KEY_STORE_ALIAS, null).let { keyStoreEntry ->
-                myPrivateKey = (keyStoreEntry as KeyStore.PrivateKeyEntry).privateKey
-            }
-
-            //sharedSecretKey
-            val sharedSecretKeyBytes = KeyAgreement.getInstance("ECDH").apply {
-                init(myPrivateKey)
-                doPhase(friendPublicKey, true)
+            val secureRandom = Base64.encodeToString(ByteArray(32).apply { SecureRandom().nextBytes(this) }, Base64.NO_WRAP)
+            val keyId: String = secureRandom //키 식별자
+            val random: ByteArray = Base64.decode(secureRandom, Base64.NO_WRAP) //난수 생성
+            val cPublicKey: PublicKey = convertStringToPublicKey(publicKey) ?: return null
+            val mPrivateKey: PrivateKey = getPrivateKey(androidKeyStore) ?: return null
+            val sharedKeyBytes = KeyAgreement.getInstance("ECDH").apply {
+                init(mPrivateKey)
+                doPhase(cPublicKey, true)
             }.generateSecret()
-
-            //hash(SHA256)
             val hash = MessageDigest.getInstance(KeyProperties.DIGEST_SHA256).apply {
-                update(sharedSecretKeyBytes)
+                update(sharedKeyBytes)
             }.digest(random)
-
-            //keySpec
-            val secretKeySpec = SecretKeySpec(
-                hash,
-                KeyProperties.KEY_ALGORITHM_AES
-            )
-
-            //sharedSecretKey(String)
-            val sharedSecretKeyString = Base64.encodeToString(
-                /*encodingKeySpec*/ secretKeySpec.encoded,
+            val sharedKeySpec = SecretKeySpec(hash, KeyProperties.KEY_ALGORITHM_AES)
+            val sharedKeyString = Base64.encodeToString(
+                /*encodingKeySpec*/sharedKeySpec.encoded,
                 /*padding*/ Base64.NO_WRAP
             )
-
-            //ESP 에 sharedSecretKey 저장
-            espm.putString(keyId, sharedSecretKeyString)
-
+            espm.putString(keyId, sharedKeyString) //sharedKey 저장 //TODO
             return keyId
         } catch (e: Exception) {
             e.printStackTrace()
+            return null
         }
-        return null
     }
 
-//    /**
+    //    /**
 //     * keystore 와 ESP 를 초기화한다.
 //     */
 //    fun reset() {
@@ -178,27 +153,29 @@ class EcdhAlg {
 //        } catch (e: Exception) {
 //            e.printStackTrace()
 //        }
-//    }
 
-//    /**
-//     * 난수를 생성한다.
-//     * @param size 난수 길이
-//     */
-//    fun generateRandom(size: Int): String? {
-//        try {
-//            return Base64.encodeToString(
-//                /*secureRandomBytes*/
-//                ByteArray(size).apply {
-//                    SecureRandom().nextBytes(this)
-//                },
-//                /*padding*/
-//                Base64.NO_WRAP
-//            )
-//        } catch (e: Exception) {
-//            e.printStackTrace()
-//            return null
-//        }
+
+    private fun generateSecureRandom(size: Int): String {
+        return Base64.encodeToString(
+            /*secureRandomBytes*/ByteArray(size).apply { SecureRandom().nextBytes(this) },
+            /*padding*/Base64.NO_WRAP
+        )
+    }
+
+
+    private fun getPrivateKey(androidKeyStore: KeyStore): PrivateKey? {
+        try {
+            androidKeyStore.getEntry(KEY_STORE_ALIAS, null).let { keyStoreEntry ->
+                return (keyStoreEntry as KeyStore.PrivateKeyEntry).privateKey
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+    }
+
 //    }
+}
 
 //    /**
 //     * @param keyId ESP 에 저장된 sharedSecretKey 의 식별자
@@ -307,44 +284,45 @@ class EcdhAlg {
 //    }
 
 
+/**
+ * ByteArray 타입 Uncompressed form 으로 publicKey 생성
+ * ByteArray affineX, affineY 로 ECPoint 를 생성해 PublicKey 로 복원한다.
+ * @param keyByteArray PublicKey ByteArray(Uncompressed Form)
+ * @return ECPublicKey
+ */
+private fun convertStringToPublicKey(publicKey: String): PublicKey? {
+    try {
+        val keyByteArray = Base64.decode(publicKey, Base64.NO_WRAP)
 
-    /**
-     * ByteArray 타입 Uncompressed form 으로 publicKey 생성
-     * ByteArray affineX, affineY 로 ECPoint 를 생성해 PublicKey 로 복원한다.
-     * @param keyByteArray PublicKey ByteArray(Uncompressed Form)
-     * @return ECPublicKey
-     */
-    private fun byteArrayToPublicKey(keyByteArray: ByteArray): PublicKey? {
-        try {
-            //ByteArray -> String
-            val _affineX = DataTypeConverter.byteArrayToString(keyByteArray, 1, 32)
-            val _affineY = DataTypeConverter.byteArrayToString(keyByteArray, 33, 32)
+        //ByteArray -> String
+        val _affineX = DataTypeConverter.byteArrayToString(keyByteArray, 1, 32)
+        val _affineY = DataTypeConverter.byteArrayToString(keyByteArray, 33, 32)
 
-            //String -> BigInteger
-            val affineX = BigInteger(_affineX, 16)
-            val affineY = BigInteger(_affineY, 16)
+        //String -> BigInteger
+        val affineX = BigInteger(_affineX, 16)
+        val affineY = BigInteger(_affineY, 16)
 
-            //AlgorithmParameters
-            val algorithmParameters =
-                AlgorithmParameters.getInstance(KeyProperties.KEY_ALGORITHM_EC)
-            algorithmParameters.init(ECGenParameterSpec("secp256r1"))
+        //AlgorithmParameters
+        val algorithmParameters =
+            AlgorithmParameters.getInstance(KeyProperties.KEY_ALGORITHM_EC)
+        algorithmParameters.init(ECGenParameterSpec("secp256r1"))
 
-            //ECParameterSpec
-            val parameterSpec = algorithmParameters.getParameterSpec(ECParameterSpec::class.java)
+        //ECParameterSpec
+        val parameterSpec = algorithmParameters.getParameterSpec(ECParameterSpec::class.java)
 
-            //KeySpec
-            val publicKeySpec = ECPublicKeySpec(
-                /*ECPoint*/
-                ECPoint(affineX, affineY),
-                /*ECParameterSpec*/
-                parameterSpec
-            )
+        //KeySpec
+        val publicKeySpec = ECPublicKeySpec(
+            /*ECPoint*/
+            ECPoint(affineX, affineY),
+            /*ECParameterSpec*/
+            parameterSpec
+        )
 
-            //publicKey -> ECPublicKey
-            return KeyFactory.getInstance(KeyProperties.KEY_ALGORITHM_EC).generatePublic(publicKeySpec) as ECPublicKey
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return null
-        }
+        //publicKey -> ECPublicKey
+        return KeyFactory.getInstance(KeyProperties.KEY_ALGORITHM_EC)
+            .generatePublic(publicKeySpec) as ECPublicKey
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return null
     }
 }

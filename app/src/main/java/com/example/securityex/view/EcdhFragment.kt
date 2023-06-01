@@ -38,8 +38,10 @@ class EcdhFragment : Fragment() {
 
     fun onClickedEvent2() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val ecKey = ecdhAlg!!.getECPublicKey()
-            Log.d(TAG, "onClickedEvent2: $ecKey")
+            val publicKey = ecdhAlg!!.getECPublicKey()
+            Log.d(TAG, "onClickedEvent2: $publicKey")
+
+
         }
     }
 }
